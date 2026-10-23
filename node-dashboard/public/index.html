@@ -1,0 +1,1090 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Human Detection | Smart Surveillance</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel: #111e30;
+      --panel2: #16253a;
+      --border: #263950;
+      --text: #edf4ff;
+      --muted: #8fa3bc;
+      --blue: #42a5ff;
+      --green: #38d9a9;
+      --red: #ff647c;
+      --yellow: #ffc857;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 14px;
+      background: var(--panel2);
+      color: var(--text);
+      transition: .2s;
+    }
+
+    button:hover { filter: brightness(1.2); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    .primary { background: #1478dc; border-color: #1478dc; }
+    .danger { background: #542536; border-color: #793348; }
+    .success { background: #123e37; border-color: #236d5b; }
+
+    header {
+      min-height: 76px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: #0b1727;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+
+    .brand-icon {
+      width: 43px;
+      height: 43px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #123f68;
+      color: #74c3ff;
+      font-size: 24px;
+    }
+
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    h2 { font-size: 16px; margin: 0; }
+    p { color: var(--muted); }
+
+    .subheading { font-size: 12px; color: var(--muted); }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      background: var(--yellow);
+    }
+
+    .dot.online { background: var(--green); }
+    .dot.offline { background: var(--red); }
+
+    .header-right {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    main {
+      max-width: 1800px;
+      margin: auto;
+      padding: 22px;
+    }
+
+    .page-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .page-heading p { margin: 5px 0 0; font-size: 13px; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .panel, .metric {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 14px;
+      min-width: 0;
+    }
+
+    .metric { padding: 19px; }
+
+    .metric-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      gap: 10px;
+    }
+
+    .metric-icon { font-size: 21px; }
+
+    .metric-value {
+      font-size: 31px;
+      font-weight: 700;
+      margin: 13px 0 7px;
+    }
+
+    .metric-foot { font-size: 12px; color: var(--muted); }
+
+    .green-text { color: var(--green); }
+    .red-text { color: var(--red); }
+    .blue-text { color: var(--blue); }
+    .yellow-text { color: var(--yellow); }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(290px, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel { overflow: hidden; margin-bottom: 18px; }
+
+    .panel-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .panel-body { padding: 17px; }
+
+    .camera-stage {
+      position: relative;
+      background: #03070d;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      min-height: 240px;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+
+    #video, #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    #video { transform: scaleX(-1); }
+    #overlay { pointer-events: none; }
+
+    .camera-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      color: var(--muted);
+      gap: 10px;
+    }
+
+    .camera-placeholder .camera-symbol { font-size: 42px; }
+
+    .camera-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .camera-meta {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 14px;
+    }
+
+    .feed-badge {
+      padding: 6px 9px;
+      background: #182a3f;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 11px;
+    }
+
+    .alert {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 13px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: #17283b;
+      border: 1px solid var(--border);
+    }
+
+    .alert.warning {
+      background: #382b19;
+      border-color: #6c5226;
+    }
+
+    .alert.critical {
+      background: #3c202a;
+      border-color: #713044;
+    }
+
+    .alert-icon { font-size: 19px; }
+    .alert strong { font-size: 13px; display: block; }
+    .alert small { color: var(--muted); display: block; margin-top: 5px; }
+
+    .settings-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .settings-row:last-child { border-bottom: 0; }
+
+    .settings-row input[type="number"] {
+      width: 75px;
+      background: #091423;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px;
+      color: white;
+    }
+
+    .settings-row input[type="checkbox"] {
+      accent-color: var(--blue);
+      width: 17px;
+      height: 17px;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .chart-wrap { height: 250px; position: relative; }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th { color: var(--muted); font-weight: 500; }
+    td { color: #dce7f5; }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      background: #153e35;
+      color: var(--green);
+    }
+
+    .pill.warning { background: #47371b; color: var(--yellow); }
+    .pill.critical { background: #48232d; color: #ff8093; }
+
+    .empty-state {
+      padding: 22px 10px;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 18px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: min(380px, calc(100vw - 40px));
+      padding: 13px 16px;
+      border-radius: 10px;
+      background: #183149;
+      border: 1px solid #315776;
+      color: white;
+      box-shadow: 0 8px 30px #0005;
+      z-index: 10;
+      display: none;
+    }
+
+    @media (max-width: 1000px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 650px) {
+      header { padding: 14px; }
+      main { padding: 13px; }
+      .analytics-grid { grid-template-columns: 1fr; }
+      .metric { padding: 14px; }
+      .metric-value { font-size: 25px; }
+      .camera-stage { min-height: 210px; }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-icon">◉</div>
+    <div>
+      <h1>Human Detection</h1>
+      <div class="subheading">SMART SURVEILLANCE SYSTEM</div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <span class="status">
+      <span class="dot" id="modelDot"></span>
+      <span id="modelStatus">AI model not loaded</span>
+    </span>
+    <span class="status">
+      <span class="dot offline" id="cameraDot"></span>
+      <span id="cameraStatus">Camera offline</span>
+    </span>
+  </div>
+</header>
+
+<main>
+  <div class="page-heading">
+    <div>
+      <h1>Surveillance Overview</h1>
+      <p>Live human detection, crowd monitoring and activity analytics</p>
+    </div>
+    <div class="header-right">
+      <span class="feed-badge" id="clock">--:--:--</span>
+      <button id="snapshotBtn" disabled>📸 Save Snapshot</button>
+    </div>
+  </div>
+
+  <section class="metrics">
+    <div class="metric">
+      <div class="metric-top"><span>People in View</span><span class="metric-icon">👥</span></div>
+      <div class="metric-value blue-text" id="peopleCount">0</div>
+      <div class="metric-foot">Current webcam frame</div>
+    </div>
+    <div class="metric">
+      <div class="metric-top"><span>Peak Count</span><span class="metric-icon">📈</span></div>
+      <div class="metric-value green-text" id="peakCount">0</div>
+      <div class="metric-foot">Highest observed count this session</div>
+    </div>
+    <div class="metric">
+      <div class="metric-top"><span>Alerts</span><span class="metric-icon">🔔</span></div>
+      <div class="metric-value yellow-text" id="alertCount">0</div>
+      <div class="metric-foot">Crowd alerts this session</div>
+    </div>
+    <div class="metric">
+      <div class="metric-top"><span>Detection Status</span><span class="metric-icon">🛡️</span></div>
+      <div class="metric-value" style="font-size:22px" id="detectionStatus">Standby</div>
+      <div class="metric-foot" id="confidenceText">Waiting for camera</div>
+    </div>
+  </section>
+
+  <section class="main-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>📹 Live Camera Feed</h2>
+          <span class="feed-badge" id="feedState">CAMERA OFFLINE</span>
+        </div>
+        <div class="panel-body">
+          <div class="camera-stage">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="overlay"></canvas>
+            <div class="camera-placeholder" id="placeholder">
+              <div class="camera-symbol">📷</div>
+              <strong>Camera is not running</strong>
+              <span>Start the webcam to begin AI human detection.</span>
+            </div>
+          </div>
+
+          <div class="camera-controls">
+            <button class="primary" id="startBtn">▶ Start Camera</button>
+            <button class="danger" id="stopBtn" disabled>■ Stop Camera</button>
+            <button id="clearBtn">Clear Logs</button>
+          </div>
+
+          <div class="camera-meta">
+            <span>Detection model: COCO-SSD</span>
+            <span id="fpsText">Detection rate: --</span>
+            <span>Source: Local webcam</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>📊 People Count Over Time</h2>
+          <span class="feed-badge">LIVE SESSION</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="countChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>📝 Detection Event Log</h2>
+          <span class="feed-badge" id="logCount">0 events</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Time</th><th>Event</th><th>People</th><th>Status</th></tr>
+            </thead>
+            <tbody id="logTable">
+              <tr><td colspan="4" class="empty-state">No events recorded yet. Start the camera.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>🚨 Security Alerts</h2>
+          <span class="feed-badge" id="alertBadge">All clear</span>
+        </div>
+        <div class="panel-body" id="alertList">
+          <div class="empty-state">No alerts. Start the camera to monitor crowd levels.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>⚙️ Detection Settings</h2></div>
+        <div class="panel-body">
+          <div class="settings-row">
+            <label for="threshold">Confidence threshold</label>
+            <input id="threshold" type="number" min="10" max="99" value="50">
+          </div>
+          <div class="settings-row">
+            <label for="crowdLimit">Crowd alert limit</label>
+            <input id="crowdLimit" type="number" min="1" max="100" value="5">
+          </div>
+          <div class="settings-row">
+            <label for="boxesToggle">Show detection boxes</label>
+            <input id="boxesToggle" type="checkbox" checked>
+          </div>
+          <div class="settings-row">
+            <label for="alertsToggle">Enable crowd alerts</label>
+            <input id="alertsToggle" type="checkbox" checked>
+          </div>
+          <p class="subheading">Settings apply to the next detection frame. This page uses your webcam, not remote CCTV feeds.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>📉 Session Analytics</h2></div>
+        <div class="panel-body">
+          <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>🎯 Detection Summary</h2></div>
+        <div class="panel-body">
+          <div class="settings-row"><span>Current people</span><strong id="summaryPeople">0</strong></div>
+          <div class="settings-row"><span>Peak people</span><strong id="summaryPeak">0</strong></div>
+          <div class="settings-row"><span>Frames processed</span><strong id="frameCount">0</strong></div>
+          <div class="settings-row"><span>Session duration</span><strong id="duration">00:00</strong></div>
+          <div class="settings-row"><span>Average confidence</span><strong id="avgConfidence">--</strong></div>
+        </div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="analytics-grid">
+    <div class="panel">
+      <div class="panel-head"><h2>📊 People vs. Empty Frames</h2></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="presenceChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>📈 Detection Confidence</h2></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="confidenceChart"></canvas></div></div>
+    </div>
+  </section>
+
+  <div class="footer">
+    Human Detection Smart Surveillance · Browser-based AI demo · Camera access requires permission
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+
+  const video = $("video");
+  const canvas = $("overlay");
+  const ctx = canvas.getContext("2d");
+
+  let model = null;
+  let stream = null;
+  let running = false;
+  let busy = false;
+  let rafId = null;
+  let sessionStart = null;
+  let lastFrameTime = 0;
+  let frameCount = 0;
+  let peakCount = 0;
+  let alertCount = 0;
+  let eventCount = 0;
+  let currentPeople = 0;
+  let confidenceSum = 0;
+  let confidenceSamples = 0;
+  let lastAlertState = false;
+  let lastLoggedPeople = -1;
+  let lastLogTime = 0;
+  let lastSampleTime = 0;
+  let countHistory = [];
+  let presenceHistory = { people: 0, empty: 0 };
+  let confidenceHistory = [];
+  let sessionAlertHistory = [];
+  let charts = {};
+
+  const MAX_POINTS = 30;
+
+  function timeString() {
+    return new Date().toLocaleTimeString();
+  }
+
+  function toast(message) {
+    const element = $("toast");
+    element.textContent = message;
+    element.style.display = "block";
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => element.style.display = "none", 3500);
+  }
+
+  function updateClock() {
+    $("clock").textContent = new Date().toLocaleString();
+    if (sessionStart) {
+      const seconds = Math.floor((Date.now() - sessionStart) / 1000);
+      $("duration").textContent =
+        String(Math.floor(seconds / 60)).padStart(2, "0") + ":" +
+        String(seconds % 60).padStart(2, "0");
+    }
+  }
+
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  function makeChart(id, type, labels, datasets, extra = {}) {
+    const element = $(id);
+    if (!element) return null;
+
+    return new Chart(element, {
+      type,
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: {
+            labels: { color: "#a9bbd0", boxWidth: 12 }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#8fa3bc", maxTicksLimit: 7 },
+            grid: { color: "#263950" }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: "#8fa3bc", precision: 0 },
+            grid: { color: "#263950" }
+          }
+        },
+        ...extra
+      }
+    });
+  }
+
+  function initCharts() {
+    Chart.defaults.color = "#a9bbd0";
+
+    charts.count = makeChart("countChart", "line", [], [{
+      label: "People",
+      data: [],
+      borderColor: "#42a5ff",
+      backgroundColor: "rgba(66,165,255,.12)",
+      fill: true,
+      tension: .3,
+      pointRadius: 2
+    }]);
+
+    charts.hour = makeChart("hourChart", "bar", ["Current", "Peak"], [{
+      label: "People",
+      data: [0, 0],
+      backgroundColor: ["#42a5ff", "#38d9a9"],
+      borderRadius: 5
+    }]);
+
+    charts.presence = makeChart("presenceChart", "doughnut",
+      ["People detected", "No people detected"], [{
+        data: [0, 0],
+        backgroundColor: ["#38d9a9", "#34475f"],
+        borderWidth: 0
+      }], {
+        scales: {},
+        plugins: { legend: { position: "bottom", labels: { color: "#a9bbd0" } } }
+      });
+
+    charts.confidence = makeChart("confidenceChart", "line", [], [{
+      label: "Average confidence %",
+      data: [],
+      borderColor: "#ffc857",
+      backgroundColor: "rgba(255,200,87,.1)",
+      fill: true,
+      tension: .3,
+      pointRadius: 2
+    }], {
+      scales: {
+        x: { ticks: { color: "#8fa3bc", maxTicksLimit: 7 }, grid: { color: "#263950" } },
+        y: { min: 0, max: 100, ticks: { color: "#8fa3bc" }, grid: { color: "#263950" } }
+      }
+    });
+  }
+
+  initCharts();
+
+  async function loadModel() {
+    try {
+      $("modelStatus").textContent = "Loading AI model…";
+      model = await cocoSsd.load({ base: "lite_mobilenet_v2" });
+      $("modelStatus").textContent = "AI model ready";
+      $("modelDot").className = "dot online";
+      $("detectionStatus").textContent = "Ready";
+      toast("AI model loaded successfully.");
+    } catch (error) {
+      console.error(error);
+      $("modelStatus").textContent = "Model load failed";
+      $("modelDot").className = "dot offline";
+      $("detectionStatus").textContent = "Unavailable";
+      toast("Could not load the AI model. Check your internet connection and reload.");
+    }
+  }
+
+  function setCameraStatus(online) {
+    $("cameraStatus").textContent = online ? "Camera online" : "Camera offline";
+    $("cameraDot").className = online ? "dot online" : "dot offline";
+    $("feedState").textContent = online ? "LIVE DETECTION" : "CAMERA OFFLINE";
+    $("placeholder").style.display = online ? "none" : "flex";
+    $("startBtn").disabled = online || !model;
+    $("stopBtn").disabled = !online;
+    $("snapshotBtn").disabled = !online;
+  }
+
+  async function startCamera() {
+    if (!model) {
+      toast("The AI model is still loading. Please wait.");
+      return;
+    }
+    if (running) return;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+
+      video.srcObject = stream;
+      await video.play();
+
+      running = true;
+      sessionStart = sessionStart || Date.now();
+      lastFrameTime = performance.now();
+      lastSampleTime = Date.now();
+
+      setCameraStatus(true);
+      $("detectionStatus").textContent = "Monitoring";
+      $("confidenceText").textContent = "AI detection active";
+      addLog("Camera started", 0, "Online");
+      toast("Camera started. Human detection is active.");
+      detectLoop();
+    } catch (error) {
+      console.error(error);
+      setCameraStatus(false);
+      let message = "Unable to start camera.";
+      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+        message = "Camera permission denied. Allow camera access in your browser.";
+      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+        message = "No webcam was found on this device.";
+      } else if (error.name === "NotReadableError") {
+        message = "Camera is busy. Close other apps using the webcam.";
+      }
+      toast(message);
+    }
+  }
+
+  function stopCamera() {
+    running = false;
+    busy = false;
+
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+
+    video.srcObject = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    setCameraStatus(false);
+    $("detectionStatus").textContent = "Standby";
+    $("confidenceText").textContent = "Waiting for camera";
+    $("fpsText").textContent = "Detection rate: --";
+
+    toast("Camera stopped.");
+  }
+
+  async function detectLoop() {
+    if (!running || busy) return;
+    if (video.readyState < 2 || !video.videoWidth) {
+      rafId = requestAnimationFrame(detectLoop);
+      return;
+    }
+
+    busy = true;
+    try {
+      const predictions = await model.detect(video);
+      if (!running) return;
+
+      const threshold = Math.max(10, Math.min(99, Number($("threshold").value) || 50)) / 100;
+      const people = predictions.filter(p => p.class === "person" && p.score >= threshold);
+
+      frameCount++;
+      currentPeople = people.length;
+
+      const meanConfidence = people.length
+        ? people.reduce((sum, p) => sum + p.score, 0) / people.length * 100
+        : 0;
+
+      if (people.length) {
+        confidenceSum += meanConfidence;
+        confidenceSamples++;
+      }
+
+      peakCount = Math.max(peakCount, currentPeople);
+      $("peopleCount").textContent = currentPeople;
+      $("peakCount").textContent = peakCount;
+      $("summaryPeople").textContent = currentPeople;
+      $("summaryPeak").textContent = peakCount;
+      $("frameCount").textContent = frameCount;
+      $("avgConfidence").textContent = confidenceSamples
+        ? (confidenceSum / confidenceSamples).toFixed(1) + "%"
+        : "--";
+
+      $("confidenceText").textContent = people.length
+        ? "Mean confidence: " + meanConfidence.toFixed(1) + "%"
+        : "No people in current frame";
+
+      $("detectionStatus").textContent = currentPeople > 0 ? "Person detected" : "Monitoring";
+      $("detectionStatus").className = "metric-value " + (currentPeople > 0 ? "green-text" : "");
+
+      drawDetections(people);
+
+      const crowdLimit = Math.max(1, Number($("crowdLimit").value) || 5);
+      const crowdNow = $("alertsToggle").checked && currentPeople >= crowdLimit;
+
+      if (crowdNow && !lastAlertState) {
+        alertCount++;
+        $("alertCount").textContent = alertCount;
+        addAlert("Crowd threshold exceeded", currentPeople + " people detected in view.", "critical");
+        addLog("Crowd alert", currentPeople, "Critical");
+        toast("Crowd alert: " + currentPeople + " people detected.");
+      }
+      lastAlertState = crowdNow;
+
+      if (Date.now() - lastLogTime > 5000 && currentPeople !== lastLoggedPeople) {
+        addLog(currentPeople ? "People detected" : "Area clear", currentPeople, currentPeople ? "Detected" : "Normal");
+        lastLogTime = Date.now();
+        lastLoggedPeople = currentPeople;
+      }
+
+      if (Date.now() - lastSampleTime > 2000) {
+        sampleAnalytics(meanConfidence);
+        lastSampleTime = Date.now();
+      }
+
+      const now = performance.now();
+      const fps = 1000 / Math.max(1, now - lastFrameTime);
+      $("fpsText").textContent = "Detection rate: " + fps.toFixed(1) + " frames/s";
+      lastFrameTime = now;
+    } catch (error) {
+      console.error("Detection error:", error);
+      $("detectionStatus").textContent = "Detection error";
+    } finally {
+      busy = false;
+      if (running) rafId = requestAnimationFrame(detectLoop);
+    }
+  }
+
+  function drawDetections(people) {
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) return;
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+    if (!$("boxesToggle").checked) return;
+
+    people.forEach(person => {
+      const [x, y, w, h] = person.bbox;
+
+      // Video is mirrored for a front-facing webcam, so mirror boxes too.
+      const mirroredX = width - x - w;
+
+      ctx.lineWidth = Math.max(2, width / 500);
+      ctx.strokeStyle = "#38d9a9";
+      ctx.fillStyle = "rgba(56,217,169,.12)";
+      ctx.strokeRect(mirroredX, y, w, h);
+      ctx.fillRect(mirroredX, y, w, h);
+
+      const label = "Person " + (person.score * 100).toFixed(0) + "%";
+      ctx.font = "bold 16px Segoe UI, Arial";
+      const textWidth = ctx.measureText(label).width + 12;
+      const labelY = Math.max(0, y - 27);
+
+      ctx.fillStyle = "#0c8e70";
+      ctx.fillRect(mirroredX, labelY, textWidth, 25);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, mirroredX + 6, labelY + 17);
+    });
+  }
+
+  function sampleAnalytics(confidence) {
+    const label = new Date().toLocaleTimeString();
+    countHistory.push({ label, count: currentPeople });
+    countHistory = countHistory.slice(-MAX_POINTS);
+
+    if (currentPeople > 0) presenceHistory.people++;
+    else presenceHistory.empty++;
+
+    confidenceHistory.push({ label, value: confidence });
+    confidenceHistory = confidenceHistory.slice(-MAX_POINTS);
+
+    if (charts.count) {
+      charts.count.data.labels = countHistory.map(x => x.label);
+      charts.count.data.datasets[0].data = countHistory.map(x => x.count);
+      charts.count.update("none");
+    }
+
+    if (charts.hour) {
+      charts.hour.data.datasets[0].data = [currentPeople, peakCount];
+      charts.hour.update("none");
+    }
+
+    if (charts.presence) {
+      charts.presence.data.datasets[0].data = [
+        presenceHistory.people, presenceHistory.empty
+      ];
+      charts.presence.update("none");
+    }
+
+    if (charts.confidence) {
+      charts.confidence.data.labels = confidenceHistory.map(x => x.label);
+      charts.confidence.data.datasets[0].data = confidenceHistory.map(x => x.value);
+      charts.confidence.update("none");
+    }
+  }
+
+  function addLog(event, people, status) {
+    eventCount++;
+    $("logCount").textContent = eventCount + " events";
+
+    const tbody = $("logTable");
+    if (tbody.querySelector(".empty-state")) tbody.innerHTML = "";
+
+    const row = document.createElement("tr");
+    const values = [timeString(), event, people, status];
+
+    values.forEach((value, index) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+
+      if (index === 3) {
+        const pill = document.createElement("span");
+        pill.className = "pill" +
+          (status === "Critical" ? " critical" : status === "Detected" ? " warning" : "");
+        pill.textContent = status;
+        cell.textContent = "";
+        cell.appendChild(pill);
+      }
+
+      row.appendChild(cell);
+    });
+
+    tbody.prepend(row);
+
+    while (tbody.children.length > 100) {
+      tbody.removeChild(tbody.lastElementChild);
+    }
+  }
+
+  function addAlert(title, detail, level = "warning") {
+    const list = $("alertList");
+    const empty = list.querySelector(".empty-state");
+    if (empty) empty.remove();
+
+    const alert = document.createElement("div");
+    alert.className = "alert " + level;
+
+    const icon = document.createElement("span");
+    icon.className = "alert-icon";
+    icon.textContent = level === "critical" ? "🚨" : "⚠️";
+
+    const content = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.textContent = title;
+
+    const small = document.createElement("small");
+    small.textContent = timeString() + " · " + detail;
+
+    content.append(strong, small);
+    alert.append(icon, content);
+    list.prepend(alert);
+
+    while (list.children.length > 12) list.removeChild(list.lastElementChild);
+
+    $("alertBadge").textContent = "Alerts: " + alertCount;
+  }
+
+  function saveSnapshot() {
+    if (!running || !video.videoWidth) {
+      toast("Start the camera before saving a snapshot.");
+      return;
+    }
+
+    const output = document.createElement("canvas");
+    output.width = video.videoWidth;
+    output.height = video.videoHeight;
+    const outCtx = output.getContext("2d");
+
+    // Mirror the captured video to match the live front-facing preview.
+    outCtx.save();
+    outCtx.translate(output.width, 0);
+    outCtx.scale(-1, 1);
+    outCtx.drawImage(video, 0, 0, output.width, output.height);
+    outCtx.restore();
+
+    if ($("boxesToggle").checked && canvas.width && canvas.height) {
+      // Overlay already contains mirrored coordinates; place it on the mirrored image.
+      outCtx.drawImage(canvas, 0, 0, output.width, output.height);
+    }
+
+    outCtx.fillStyle = "rgba(0,0,0,.65)";
+    outCtx.fillRect(12, output.height - 42, Math.min(output.width - 24, 390), 30);
+    outCtx.fillStyle = "#ffffff";
+    outCtx.font = "16px Arial";
+    outCtx.fillText(
+      "Human Detection | People: " + currentPeople + " | " + new Date().toLocaleString(),
+      20, output.height - 22
+    );
+
+    const link = document.createElement("a");
+    link.download = "human-detection-" + Date.now() + ".png";
+    link.href = output.toDataURL("image/png");
+    link.click();
+
+    addLog("Snapshot saved", currentPeople, "Saved");
+    toast("Snapshot downloaded to your computer.");
+  }
+
+  $("startBtn").addEventListener("click", startCamera);
+  $("stopBtn").addEventListener("click", stopCamera);
+  $("snapshotBtn").addEventListener("click", saveSnapshot);
+
+  $("clearBtn").addEventListener("click", () => {
+    $("logTable").innerHTML =
+      '<tr><td colspan="4" class="empty-state">Logs cleared.</td></tr>';
+    eventCount = 0;
+    $("logCount").textContent = "0 events";
+    toast("Event log cleared.");
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+  });
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast("Camera access is not supported here. Open this page on localhost using a modern browser.");
+  }
+
+  loadModel();
+})();
+</script>
+</body>
+</html>

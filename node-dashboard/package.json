@@ -1,0 +1,13 @@
+﻿{
+  "name": "human-detection-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@tensorflow-models/coco-ssd": "2.2.3",
+    "@tensorflow/tfjs": "4.22.0",
+    "express": "^5.3.0"
+  }
+}
